@@ -1,0 +1,199 @@
+#!/usr/bin/env python
+import os
+import sys
+from uuid import uuid4
+from glob import iglob
+from datetime import datetime
+
+_CONFIG_FILE_NAME="config"
+_DATA_DIR=".later"
+_USERNAME=os.getenv("USERNAME", "nobody")
+
+_CONFIG={
+	"username": _USERNAME,
+	"data_dir": os.path.join("/home", _USERNAME, _DATA_DIR),
+	"default_priority": 0,
+}
+
+def find_config():
+	"""Find config file starting from current directory upwards. Fallback is home dir."""
+	current = os.path.abspath(os.path.curdir)
+	trash = None
+	while len(current) > 1:
+		data = os.path.join(current, _DATA_DIR)
+		config = os.path.join(data, _CONFIG_FILE_NAME)
+		if os.path.isdir(data) and os.path.isfile(config):
+			return config
+		current, trash = os.path.split(current)
+	return os.path.join("/home", _USERNAME, _CONFIG_FILE_NAME)
+
+def load_config():
+	"""Load config from file"""
+	path = find_config()
+	if os.path.isfile(path):
+		for line in open(path):
+			i = line.index(": ")
+			_CONFIG[line[:i]] = line[i+2:-1]
+		_CONFIG["data_dir"] = os.path.dirname(path)
+
+def store_config(path, **overwrite):
+	"""Store config to file"""
+	fh = open(path, 'w')
+	for key,val in overwrite.items():
+		_CONFIG[key] = val
+	for key,val in _CONFIG.items():
+		if key == "data_dir": continue
+		fh.write("%s: %s\n" % (key,val))
+	fh.close()
+
+_PROPERTY_CHARS="abcdefghijklmnopqrstuvwxyz_0123456789"
+def is_property_line(line):
+	for i,c in enumerate(line):
+		if not c in _PROPERTY_CHARS:
+			if i > 0 and c == ":":
+				return True
+			else:
+				return False
+	return False
+			
+def load_lfile(path):
+	fh = open(path)
+	props = dict()
+	line = fh.readline()
+	while is_property_line(line):
+		i = line.index(":")
+		props[line[:i]] = line[i+1:].strip()
+		line = fh.readline()
+	msg = ""
+	while line:
+		msg += line
+		line = fh.readline()
+	return msg.strip(), props
+
+def store_lfile(path, msg, props):
+	fh = open(path, 'w')
+	for key,val in props.items():
+		fh.write("%s: %s\n" % (key,val))
+	fh.write("\n")
+	fh.write(msg)
+	fh.write("\n")
+	fh.close()
+
+def serialize_datetime(dt):
+	return dt.strftime("%Y-%m-%dT%H:%M:%S%z")
+
+def complete_guid(halfguid):
+	for path in iglob(os.path.join(_CONFIG["data_dir"], "*.issue")):
+		guid = os.path.basename(path)[:-6]
+		if guid.startswith(halfguid):
+			return guid
+
+class Issue:
+	def __init__(self, guid=None):
+		self.msg = "Something is rotten ..."
+		self.properties = dict(
+				status="reported",
+				priority=_CONFIG["default_priority"],
+				responsible="nobody",
+				created=serialize_datetime(datetime.utcnow()),
+				reporter=_CONFIG["username"])
+		if guid:
+			if len(guid) < 36:
+				guid = complete_guid(guid)
+			self.guid = guid
+			self._load()
+		else:
+			self.guid = str(uuid4())
+		self.filename = self._genPath()
+	def _genPath(self):
+		return os.path.join(_CONFIG["data_dir"], self.guid + ".issue")
+	def _load(self):
+		m, p = load_lfile(self._genPath())
+		self.msg = m
+		for key,val in p.items():
+			self.properties[key] = val
+	def store(self):
+		self.properties["modified"] = serialize_datetime(datetime.utcnow())
+		store_lfile(self._genPath(), self.msg, self.properties)
+	def shortString(self):
+		i = self.msg.find("\n")
+		if i < 0:
+			i = None
+		string = self.msg[:i]
+		status = self.properties.get("status", "?")
+		priority = self.properties.get("priority", "?")
+		return " %-50s\t(%s, %s, %s)" % (string, status, priority, self.guid[:8])
+
+def cmd_init(args):
+	try:
+		os.mkdir(_DATA_DIR)
+		store_config(os.path.join(_DATA_DIR, _CONFIG_FILE_NAME))
+	except OSError, e:
+		print "Could not create data directory:", e
+
+def cmd_add(args):
+	load_config()
+	issue = Issue()
+	issue.msg = args.pop(0)
+	issue.store()
+	print "Issue stored as", issue.guid
+
+def cmd_list(args):
+	load_config()
+	for path in iglob(os.path.join(_CONFIG["data_dir"], "*.issue")):
+		guid = os.path.basename(path)[:-6]
+		issue = Issue(guid)
+		print issue.shortString()
+
+def cmd_edit(args):
+	load_config()
+	try:
+		guid = args[0]
+	except IndexError:
+		guid = None
+	editor = os.getenv("EDITOR")
+	if not editor:
+		print "Error: no $EDITOR environment variable"
+		return
+	issue = Issue(guid)
+	if not guid:
+		issue.store() # generate skeleton
+	cmd = "%s %s" % (editor, issue.filename)
+	os.system(cmd)
+
+def cmd_show(args):
+	load_config()
+	guid = args[0]
+	issue = Issue(guid)
+	print open(issue.filename).read()
+
+_USAGE = """\
+A command-line issue tracker for a lazy developer.
+Usage is "%s <cmd> ...", where <cmd> is one of
+
+init            create a data dir in the current directory
+add "foo bar"   report new issue with message "foo bar"
+edit <guid>     edit issue with the given guid (no guid creates new issue)
+list            show all issues in short
+show <guid>     show issue <guid> completely
+help            shows this message
+""" % (sys.argv[0])
+
+def cmd_help(args):
+	if len(args) == 0:
+		print _USAGE
+	else:
+		print "?"
+
+def main():
+	if len(sys.argv) <= 1:
+		print "Error: No command given. Try 'help'."
+		return
+	fun = globals().get("cmd_" + sys.argv[1], None)
+	if not fun:
+		print "Error: Unknown command. Try 'help'."
+		return
+	fun(sys.argv[2:])
+
+if __name__ == "__main__":
+	main()
