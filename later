@@ -108,10 +108,20 @@ def serialize_datetime(dt):
 	return dt.strftime("%Y-%m-%dT%H:%M:%S%z")
 
 def complete_guid(halfguid):
+	if len(halfguid) == 36:
+		return halfguid
+	found = None
 	for path in iglob(os.path.join(_CONFIG["data_dir"], "*.issue")):
 		guid = os.path.basename(path)[:-6]
 		if guid.startswith(halfguid):
-			return guid
+			if found:
+				print "The guid part is ambiguous:"
+				print guid, "or"
+				print found, "?"
+				return
+			else:
+				found = guid
+	return found
 
 class Issue:
 	def __init__(self, guid=None):
@@ -123,8 +133,6 @@ class Issue:
 				created=serialize_datetime(datetime.utcnow()),
 				reporter=_HOOKS["guess_username"]())
 		if guid:
-			if len(guid) < 36:
-				guid = complete_guid(guid)
 			self.guid = guid
 			self._load()
 		else:
@@ -178,7 +186,9 @@ def cmd_edit(args):
 If none specified a new issue is generated (like add does.)"""
 	load_config()
 	try:
-		guid = args[0]
+		guid = complete_guid(args[0])
+		if not guid:
+			return
 	except IndexError:
 		guid = None
 	editor = os.getenv("EDITOR")
@@ -194,14 +204,24 @@ If none specified a new issue is generated (like add does.)"""
 def cmd_show(args):
 	"""Show a specific issue."""
 	load_config()
-	guid = args[0]
+	if not args:
+		print "Error: need guid argument"
+		return
+	guid = complete_guid(args[0])
+	if not guid:
+		return
 	issue = Issue(guid)
 	print open(issue.filename).read()
 
 def cmd_close(args):
 	"""Mark a specific issue as done."""
 	load_config()
-	guid = args[0]
+	if not args:
+		print "Error: need guid argument"
+		return
+	guid = complete_guid(args[0])
+	if not guid:
+		return
 	issue = Issue(guid)
 	issue.properties["status"] = "closed"
 	issue.store()
