@@ -146,8 +146,7 @@ class Issue:
 			i = None
 		string = self.msg[:i]
 		status = self.properties.get("status", "?")
-		priority = self.properties.get("priority", "?")
-		return " %-50s\t(%s, %s, %s)" % (string, status, priority, self.guid[:8])
+		return " %-50s\t(%s, %s)" % (string, status, self.guid[:8])
 
 def cmd_init(args):
 	"""Create a new data directory for issues in the current dir."""
