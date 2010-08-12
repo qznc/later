@@ -200,6 +200,8 @@ If none specified a new issue is generated (like add does.)"""
 		issue.store() # generate skeleton
 	cmd = "%s %s" % (editor, issue.filename)
 	os.system(cmd)
+	issue = Issue(guid)
+	issue.store() # updates modified property
 
 def cmd_show(args):
 	"""Show a specific issue."""
