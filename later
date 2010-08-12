@@ -145,6 +145,7 @@ class Issue:
 		return " %-50s\t(%s, %s, %s)" % (string, status, priority, self.guid[:8])
 
 def cmd_init(args):
+	"""Create a new data directory for issues in the current dir."""
 	try:
 		os.mkdir(_DATA_DIR)
 		store_config(os.path.join(_DATA_DIR, _CONFIG_FILE_NAME))
@@ -152,6 +153,7 @@ def cmd_init(args):
 		print "Could not create data directory:", e
 
 def cmd_add(args):
+	"""Quickly add a new issue by specifying only a message."""
 	load_config()
 	issue = Issue()
 	issue.msg = args.pop(0)
@@ -159,6 +161,7 @@ def cmd_add(args):
 	print "Issue stored as", issue.guid
 
 def cmd_list(args):
+	"""Lists all issues."""
 	load_config()
 	for path in iglob(os.path.join(_CONFIG["data_dir"], "*.issue")):
 		guid = os.path.basename(path)[:-6]
@@ -166,6 +169,8 @@ def cmd_list(args):
 		print issue.shortString()
 
 def cmd_edit(args):
+	"""Edit a specific issue.
+If none specified a new issue is generated (like add does.)"""
 	load_config()
 	try:
 		guid = args[0]
@@ -182,6 +187,7 @@ def cmd_edit(args):
 	os.system(cmd)
 
 def cmd_show(args):
+	"""Show a specific issue."""
 	load_config()
 	guid = args[0]
 	issue = Issue(guid)
@@ -196,19 +202,26 @@ add "foo bar"   report new issue with message "foo bar"
 edit <guid>     edit issue with the given guid (no guid creates new issue)
 list            show all issues in short
 show <guid>     show issue <guid> completely
-help            shows this message
+help <cmd>      shows documentation for one of the commands
 """ % (sys.argv[0])
 
 def cmd_help(args):
+	"""Provides general usage and help for every command."""
 	if len(args) == 0:
 		print _USAGE
-	else:
-		print "?"
+		return
+	fun = globals().get("cmd_" + args[0], None)
+	if not fun:
+		print "Can not help you with that. Typo?"
+		return
+	# print docstring as help for a specific command
+	print fun.__doc__
 
 def main():
 	if len(sys.argv) <= 1:
 		print "Error: No command given. Try 'help'."
 		return
+	# e.g. "init" leads to calling "cmd_init"
 	fun = globals().get("cmd_" + sys.argv[1], None)
 	if not fun:
 		print "Error: Unknown command. Try 'help'."
