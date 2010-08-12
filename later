@@ -161,12 +161,13 @@ def cmd_add(args):
 	print "Issue stored as", issue.guid
 
 def cmd_list(args):
-	"""Lists all issues."""
+	"""Lists all issues, which are not closed."""
 	load_config()
 	for path in iglob(os.path.join(_CONFIG["data_dir"], "*.issue")):
 		guid = os.path.basename(path)[:-6]
 		issue = Issue(guid)
-		print issue.shortString()
+		if issue.properties["status"] != "closed":
+			print issue.shortString()
 
 def cmd_edit(args):
 	"""Edit a specific issue.
@@ -193,6 +194,14 @@ def cmd_show(args):
 	issue = Issue(guid)
 	print open(issue.filename).read()
 
+def cmd_close(args):
+	"""Mark a specific issue as done."""
+	load_config()
+	guid = args[0]
+	issue = Issue(guid)
+	issue.properties["status"] = "closed"
+	issue.store()
+
 _USAGE = """\
 A command-line issue tracker for a lazy developer.
 Usage is "%s <cmd> ...", where <cmd> is one of
@@ -200,6 +209,7 @@ Usage is "%s <cmd> ...", where <cmd> is one of
 init            create a data dir in the current directory
 add "foo bar"   report new issue with message "foo bar"
 edit <guid>     edit issue with the given guid (no guid creates new issue)
+close <gui>     mark an issue as done
 list            show all issues in short
 show <guid>     show issue <guid> completely
 help <cmd>      shows documentation for one of the commands
