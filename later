@@ -3,6 +3,7 @@ import os
 import sys
 import subprocess
 import pwd
+import imp
 from uuid import uuid4
 from glob import iglob
 from datetime import datetime
@@ -16,6 +17,7 @@ _CONFIG={
 	"default_priority": 0,
 	"vcs_type": "git"
 }
+_HOOKS=dict()
 
 def find_config():
 	"""Find config file starting from current directory upwards. Fallback is home dir."""
@@ -30,21 +32,23 @@ def find_config():
 	return os.path.join("/home", _USERNAME, _CONFIG_FILE_NAME)
 
 def determine_user():
-	# First try: config file has username specified
 	if "username" in _CONFIG and _CONFIG["username"] != "":
-		return
-	# Second try: use git username
-	if _CONFIG["vcs_type"] == "git":
-		try:
-			user_name = subprocess.Popen(["git", "config", "user.name"], stdout=subprocess.PIPE).communicate()[0].strip()
-			user_mail = subprocess.Popen(["git", "config", "user.email"], stdout=subprocess.PIPE).communicate()[0].strip()
-			if user_name != "" and user_mail != "":
-				_CONFIG["username"] = "%s <%s>" % (user_name, user_mail)
-				return
-		except:
-			pass
-	# Last try: user login name
-	_CONFIG["username"] = pwd.getpwuid(os.getuid())[0]
+		return # already there
+	_CONFIG["username"] = _HOOKS["guess_username"]()
+
+def __guess_username():
+	# try user login name
+	return pwd.getpwuid(os.getuid())[0]
+_HOOKS["guess_username"] = __guess_username
+
+def load_plugin(path):
+	name = os.path.basename(path)[:-3]
+	mod = imp.load_source("plugin:"+name, path)
+	mod.plugin_init(_HOOKS)
+
+def load_plugins():
+	for path in iglob(os.path.join(_CONFIG["data_dir"], "*.py")):
+		load_plugin(path)
 
 def load_config():
 	"""Load config from file"""
@@ -54,6 +58,7 @@ def load_config():
 			i = line.index(": ")
 			_CONFIG[line[:i]] = line[i+2:-1]
 		_CONFIG["data_dir"] = os.path.dirname(path)
+	load_plugins()
 	determine_user()
 
 def store_config(path, **overwrite):
@@ -116,7 +121,7 @@ class Issue:
 				priority=_CONFIG["default_priority"],
 				responsible="nobody",
 				created=serialize_datetime(datetime.utcnow()),
-				reporter=_CONFIG["username"])
+				reporter=_HOOKS["guess_username"]())
 		if guid:
 			if len(guid) < 36:
 				guid = complete_guid(guid)
