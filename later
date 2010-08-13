@@ -13,7 +13,16 @@ _DATA_DIR=".later"
 _CONFIG={
 	"default_priority": 0,
 }
-_HOOKS=dict()
+
+class Hooks(object):
+	def __getitem__(self, key):
+		return self.__dict__[key]
+	def __setitem__(self, key, value):
+		self.__dict__[key] = value
+	def get(self, key, default=None):
+		return self.__dict__.get(key, default)
+
+_HOOKS=Hooks()
 def hooked(fun):
 	"""Decorator: make function available via _HOOKS"""
 	_HOOKS[fun.__name__] = fun
@@ -32,7 +41,7 @@ def find_config():
 def determine_user():
 	if "username" in _CONFIG and _CONFIG["username"] != "":
 		return # already there
-	_CONFIG["username"] = _HOOKS["guess_username"]()
+	_CONFIG["username"] = _HOOKS.guess_username()
 
 @hooked
 def guess_username():
@@ -109,7 +118,7 @@ class Issue:
 				#priority=_CONFIG["default_priority"],
 				responsible="nobody",
 				created=serialize_datetime(datetime.utcnow()),
-				reporter=_HOOKS["guess_username"]())
+				reporter=_HOOKS.guess_username())
 		for k,v in properties.items():
 			self.properties[k] = v
 		self.msg = message
@@ -144,7 +153,7 @@ def be_complete_guid(halfguid):
 	if len(halfguid) == 36:
 		return halfguid # already complete
 	found = None
-	for guid in _HOOKS["be_all_guids"]():
+	for guid in _HOOKS.be_all_guids():
 		if guid.startswith(halfguid):
 			if found:
 				print "The guid part is ambiguous:"
@@ -182,14 +191,14 @@ def cmd_add(args):
 	"""Quickly add a new issue by specifying only a message."""
 	issue = Issue()
 	issue.msg = args.pop(0)
-	_HOOKS["be_store_issue"](issue)
+	_HOOKS.be_store_issue(issue)
 	print "issue stored as", issue.guid
 
 @hooked
 def cmd_list(args):
 	"""Lists all issues, which are not closed."""
-	for guid in _HOOKS["be_all_guids"]():
-		issue = _HOOKS["be_load_issue"](guid)
+	for guid in _HOOKS.be_all_guids():
+		issue = _HOOKS.be_load_issue(guid)
 		if issue.properties["status"] != "closed":
 			print issue.shortString()
 
@@ -198,7 +207,7 @@ def cmd_edit(args):
 	"""Edit a specific issue.
 If none specified a new issue is generated (like add does.)"""
 	try:
-		guid = _HOOKS["be_complete_guid"](args[0])
+		guid = _HOOKS.be_complete_guid(args[0])
 		if not guid:
 			return
 	except IndexError:
@@ -207,14 +216,14 @@ If none specified a new issue is generated (like add does.)"""
 	if not editor:
 		print "Error: no $EDITOR environment variable"
 		return
-	issue = _HOOKS["be_load_issue"](guid)
+	issue = _HOOKS.be_load_issue(guid)
 	if not guid: # generate skeleton
-		_HOOKS["be_store_issue"](issue)
+		_HOOKS.be_store_issue(issue)
 	filename = be_gen_path(guid)
 	cmd = "%s %s" % (editor, filename)
 	os.system(cmd)
-	issue = _HOOKS["be_load_issue"](guid)
-	_HOOKS["be_store_issue"](issue) # updates modified properties
+	issue = _HOOKS.be_load_issue(guid)
+	_HOOKS.be_store_issue(issue) # updates modified properties
 	if not guid: # generated a new issue
 		print "Issue stored as", issue.guid
 
@@ -224,10 +233,10 @@ def cmd_show(args):
 	if not args:
 		print "Error: need guid argument"
 		return
-	guid = _HOOKS["be_complete_guid"](args[0])
+	guid = _HOOKS.be_complete_guid(args[0])
 	if not guid:
 		return
-	issue = _HOOKS["be_load_issue"](guid)
+	issue = _HOOKS.be_load_issue(guid)
 	print issue.longString()
 
 @hooked
@@ -236,12 +245,12 @@ def cmd_close(args):
 	if not args:
 		print "Error: need guid argument"
 		return
-	guid = _HOOKS["be_complete_guid"](args[0])
+	guid = _HOOKS.be_complete_guid(args[0])
 	if not guid:
 		return
-	issue = _HOOKS["be_load_issue"](guid)
+	issue = _HOOKS.be_load_issue(guid)
 	issue.properties["status"] = "closed"
-	_HOOKS["be_store_issue"](issue)
+	_HOOKS.be_store_issue(issue)
 
 _USAGE = """\
 A command-line issue tracker for a lazy developer.
