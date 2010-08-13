@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import os
 import sys
-import subprocess
 import pwd
 import imp
 from uuid import uuid4
@@ -10,17 +9,17 @@ from datetime import datetime
 
 _CONFIG_FILE_NAME="config"
 _DATA_DIR=".later"
-_USERNAME=os.getenv("USERNAME", "nobody")
 
 _CONFIG={
-	"data_dir": os.path.join("/home", _USERNAME, _DATA_DIR),
 	"default_priority": 0,
-	"vcs_type": "git"
 }
 _HOOKS=dict()
+def hooked(fun):
+	"""Decorator: make function available via _HOOKS"""
+	_HOOKS[fun.__name__] = fun
 
 def find_config():
-	"""Find config file starting from current directory upwards. Fallback is home dir."""
+	"""Find config file starting from current directory upwards."""
 	current = os.path.abspath(os.path.curdir)
 	trash = None
 	while len(current) > 1:
@@ -29,26 +28,22 @@ def find_config():
 		if os.path.isdir(data) and os.path.isfile(config):
 			return config
 		current, trash = os.path.split(current)
-	return os.path.join("/home", _USERNAME, _CONFIG_FILE_NAME)
 
 def determine_user():
 	if "username" in _CONFIG and _CONFIG["username"] != "":
 		return # already there
 	_CONFIG["username"] = _HOOKS["guess_username"]()
 
-def __guess_username():
+@hooked
+def guess_username():
 	# try user login name
 	return pwd.getpwuid(os.getuid())[0]
-_HOOKS["guess_username"] = __guess_username
-
-def load_plugin(path):
-	name = os.path.basename(path)[:-3]
-	mod = imp.load_source("plugin:"+name, path)
-	mod.plugin_init(_HOOKS)
 
 def load_plugins():
 	for path in iglob(os.path.join(_CONFIG["data_dir"], "*.py")):
-		load_plugin(path)
+		name = os.path.basename(path)[:-3]
+		mod = imp.load_source("plugin:"+name, path)
+		mod.plugin_init(_HOOKS)
 
 def load_config():
 	"""Load config from file"""
@@ -71,7 +66,7 @@ def store_config(path, **overwrite):
 		fh.write("%s: %s\n" % (key,val))
 	fh.close()
 
-_PROPERTY_CHARS="abcdefghijklmnopqrstuvwxyz_0123456789"
+_PROPERTY_CHARS="abcdefghijklmnopqrstuvwxyz_"
 def is_property_line(line):
 	for i,c in enumerate(line):
 		if not c in _PROPERTY_CHARS:
@@ -109,7 +104,7 @@ def serialize_datetime(dt):
 
 def complete_guid(halfguid):
 	if len(halfguid) == 36:
-		return halfguid
+		return halfguid # already complete
 	found = None
 	for path in iglob(os.path.join(_CONFIG["data_dir"], "*.issue")):
 		guid = os.path.basename(path)[:-6]
@@ -128,7 +123,7 @@ class Issue:
 		self.msg = "Something is rotten ..."
 		self.properties = dict(
 				status="reported",
-				priority=_CONFIG["default_priority"],
+				#priority=_CONFIG["default_priority"],
 				responsible="nobody",
 				created=serialize_datetime(datetime.utcnow()),
 				reporter=_HOOKS["guess_username"]())
@@ -146,9 +141,11 @@ class Issue:
 		for key,val in p.items():
 			self.properties[key] = val
 	def store(self):
+		"""Store issue data to file system"""
 		self.properties["modified"] = serialize_datetime(datetime.utcnow())
 		store_lfile(self._genPath(), self.msg, self.properties)
 	def shortString(self):
+		"""One line representation"""
 		i = self.msg.find("\n")
 		if i < 0:
 			i = None
@@ -156,17 +153,15 @@ class Issue:
 		status = self.properties.get("status", "?")
 		return " %-50s\t(%s, %s)" % (string, status, self.guid[:8])
 
+# explicitly not @hooked.
 def cmd_init(args):
 	"""Create a new data directory for issues in the current dir."""
 	try:
 		os.mkdir(_DATA_DIR)
-		store_config(os.path.join(_DATA_DIR, _CONFIG_FILE_NAME))
 	except OSError, e:
 		print "Could not create data directory:", e
-
-def hooked(fun):
-	"""make function available via _HOOKS"""
-	_HOOKS[fun.__name__] = fun
+		return
+	store_config(os.path.join(_DATA_DIR, _CONFIG_FILE_NAME))
 
 @hooked
 def cmd_add(args):
@@ -206,6 +201,8 @@ If none specified a new issue is generated (like add does.)"""
 	os.system(cmd)
 	issue = Issue(guid)
 	issue.store() # updates modified property
+	if not guid: # generated a new issue
+		print "Issue stored as", issue.guid
 
 @hooked
 def cmd_show(args):
