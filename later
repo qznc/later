@@ -6,6 +6,7 @@ import imp
 from uuid import uuid4
 from glob import iglob
 from datetime import datetime
+from tempfile import mkstemp
 
 _CONFIG_FILE_NAME="config"
 _DATA_DIR=".later"
@@ -211,12 +212,12 @@ If none specified a new issue is generated (like add does.)"""
 		print "Error: no $EDITOR environment variable"
 		return
 	issue = _HOOKS.be_load_issue(guid)
-	if not guid: # generate skeleton
-		_HOOKS.be_store_issue(issue)
-	filename = be_gen_path(guid)
+	fh, filename = mkstemp(".issue")
+	store_lfile(filename, issue.msg, issue.properties)
 	cmd = "%s %s" % (editor, filename)
 	os.system(cmd)
-	issue = _HOOKS.be_load_issue(guid)
+	m,p = load_lfile(filename)
+	issue = Issue(issue.guid, p, m)
 	_HOOKS.be_store_issue(issue) # updates modified properties
 	if not guid: # generated a new issue
 		print "Issue stored as", issue.guid
