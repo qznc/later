@@ -38,11 +38,6 @@ def find_config():
 			return config
 		current, trash = os.path.split(current)
 
-def determine_user():
-	if "username" in _CONFIG and _CONFIG["username"] != "":
-		return # already there
-	_CONFIG["username"] = _HOOKS.guess_username()
-
 @hooked
 def guess_username():
 	# try user login name
@@ -63,13 +58,12 @@ def load_config():
 			_CONFIG[line[:i]] = line[i+2:-1]
 		_CONFIG["data_dir"] = os.path.dirname(path)
 	load_plugins()
-	determine_user()
+	if not _CONFIG.get("username", None):
+		_CONFIG["username"] = _HOOKS.guess_username()
 
-def store_config(path, **overwrite):
+def store_config(path):
 	"""Store config to file"""
 	fh = open(path, 'w')
-	for key,val in overwrite.items():
-		_CONFIG[key] = val
 	for key,val in _CONFIG.items():
 		if key == "data_dir": continue
 		fh.write("%s: %s\n" % (key,val))
@@ -139,7 +133,7 @@ class Issue:
 		string += "\n" + self.msg
 		return string
 
-# explicitly not hooked, since backend specific
+# explicitly not @hooked, since backend specific
 def be_gen_path(guid):
 	return os.path.join(_CONFIG["data_dir"], guid + ".issue")
 
@@ -176,7 +170,7 @@ def be_load_issue(guid):
 	m, p = load_lfile(path)
 	return Issue(guid, p, m)
 
-# explicitly not @hooked.
+# explicitly not @hooked, since now plugins available at this point
 def cmd_init(args):
 	"""Create a new data directory for issues in the current dir."""
 	try:
