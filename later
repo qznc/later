@@ -164,27 +164,31 @@ def cmd_init(args):
 	except OSError, e:
 		print "Could not create data directory:", e
 
+def hooked(fun):
+	"""make function available via _HOOKS"""
+	_HOOKS[fun.__name__] = fun
+
+@hooked
 def cmd_add(args):
 	"""Quickly add a new issue by specifying only a message."""
-	load_config()
 	issue = Issue()
 	issue.msg = args.pop(0)
 	issue.store()
 	print "Issue stored as", issue.guid
 
+@hooked
 def cmd_list(args):
 	"""Lists all issues, which are not closed."""
-	load_config()
 	for path in iglob(os.path.join(_CONFIG["data_dir"], "*.issue")):
 		guid = os.path.basename(path)[:-6]
 		issue = Issue(guid)
 		if issue.properties["status"] != "closed":
 			print issue.shortString()
 
+@hooked
 def cmd_edit(args):
 	"""Edit a specific issue.
 If none specified a new issue is generated (like add does.)"""
-	load_config()
 	try:
 		guid = complete_guid(args[0])
 		if not guid:
@@ -203,9 +207,9 @@ If none specified a new issue is generated (like add does.)"""
 	issue = Issue(guid)
 	issue.store() # updates modified property
 
+@hooked
 def cmd_show(args):
 	"""Show a specific issue."""
-	load_config()
 	if not args:
 		print "Error: need guid argument"
 		return
@@ -215,9 +219,9 @@ def cmd_show(args):
 	issue = Issue(guid)
 	print open(issue.filename).read()
 
+@hooked
 def cmd_close(args):
 	"""Mark a specific issue as done."""
-	load_config()
 	if not args:
 		print "Error: need guid argument"
 		return
@@ -241,12 +245,13 @@ show <guid>     show issue <guid> completely
 help <cmd>      shows documentation for one of the commands
 """ % (sys.argv[0])
 
+@hooked
 def cmd_help(args):
 	"""Provides general usage and help for every command."""
 	if len(args) == 0:
 		print _USAGE
 		return
-	fun = globals().get("cmd_" + args[0], None)
+	fun = _HOOKS.get("cmd_" + args[0], None)
 	if not fun:
 		print "Can not help you with that. Typo?"
 		return
@@ -257,8 +262,12 @@ def main():
 	if len(sys.argv) <= 1:
 		print "Error: No command given. Try 'help'."
 		return
-	# e.g. "init" leads to calling "cmd_init"
-	fun = globals().get("cmd_" + sys.argv[1], None)
+	if sys.argv[1] == "init":
+		cmd_init(sys.argv[2:])
+		return
+	load_config()
+	# e.g. "add" leads to calling "cmd_add"
+	fun = _HOOKS.get("cmd_" + sys.argv[1], None)
 	if not fun:
 		print "Error: Unknown command. Try 'help'."
 		return
@@ -266,3 +275,4 @@ def main():
 
 if __name__ == "__main__":
 	main()
+
