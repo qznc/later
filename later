@@ -102,12 +102,49 @@ def store_lfile(path, msg, props):
 def serialize_datetime(dt):
 	return dt.strftime("%Y-%m-%dT%H:%M:%S%z")
 
-def complete_guid(halfguid):
+class Issue:
+	def __init__(self, guid=None, properties=dict(), message="Something is rotten ..."):
+		self.properties = dict(
+				status="reported",
+				#priority=_CONFIG["default_priority"],
+				responsible="nobody",
+				created=serialize_datetime(datetime.utcnow()),
+				reporter=_HOOKS["guess_username"]())
+		for k,v in properties.items():
+			self.properties[k] = v
+		self.msg = message
+		self.guid = guid or str(uuid4())
+	def shortString(self):
+		"""One line representation"""
+		i = self.msg.find("\n")
+		if i < 0:
+			i = None
+		string = self.msg[:i]
+		status = self.properties.get("status", "?")
+		return " %-50s\t(%s, %s)" % (string, status, self.guid[:8])
+	def longString(self):
+		"""Multi line representation"""
+		string = "%s\n" % (self.guid)
+		for k,v in self.properties.items():
+			string += "%s: %s\n" % (k,v)
+		string += "\n" + self.msg
+		return string
+
+# explicitly not hooked, since backend specific
+def be_gen_path(guid):
+	return os.path.join(_CONFIG["data_dir"], guid + ".issue")
+
+@hooked
+def be_all_guids():
+	for path in iglob(be_gen_path("*")):
+		yield os.path.basename(path)[:-6]
+
+@hooked
+def be_complete_guid(halfguid):
 	if len(halfguid) == 36:
 		return halfguid # already complete
 	found = None
-	for path in iglob(os.path.join(_CONFIG["data_dir"], "*.issue")):
-		guid = os.path.basename(path)[:-6]
+	for guid in _HOOKS["be_all_guids"]():
 		if guid.startswith(halfguid):
 			if found:
 				print "The guid part is ambiguous:"
@@ -118,40 +155,17 @@ def complete_guid(halfguid):
 				found = guid
 	return found
 
-class Issue:
-	def __init__(self, guid=None):
-		self.msg = "Something is rotten ..."
-		self.properties = dict(
-				status="reported",
-				#priority=_CONFIG["default_priority"],
-				responsible="nobody",
-				created=serialize_datetime(datetime.utcnow()),
-				reporter=_HOOKS["guess_username"]())
-		if guid:
-			self.guid = guid
-			self._load()
-		else:
-			self.guid = str(uuid4())
-		self.filename = self._genPath()
-	def _genPath(self):
-		return os.path.join(_CONFIG["data_dir"], self.guid + ".issue")
-	def _load(self):
-		m, p = load_lfile(self._genPath())
-		self.msg = m
-		for key,val in p.items():
-			self.properties[key] = val
-	def store(self):
-		"""Store issue data to file system"""
-		self.properties["modified"] = serialize_datetime(datetime.utcnow())
-		store_lfile(self._genPath(), self.msg, self.properties)
-	def shortString(self):
-		"""One line representation"""
-		i = self.msg.find("\n")
-		if i < 0:
-			i = None
-		string = self.msg[:i]
-		status = self.properties.get("status", "?")
-		return " %-50s\t(%s, %s)" % (string, status, self.guid[:8])
+@hooked
+def be_store_issue(issue):
+	issue.properties["modified"] = serialize_datetime(datetime.utcnow())
+	store_lfile(be_gen_path(issue.guid), issue.msg, issue.properties)
+
+@hooked
+def be_load_issue(guid):
+	assert len(guid) == 36
+	path = be_gen_path(guid)
+	m, p = load_lfile(path)
+	return Issue(guid, p, m)
 
 # explicitly not @hooked.
 def cmd_init(args):
@@ -168,15 +182,14 @@ def cmd_add(args):
 	"""Quickly add a new issue by specifying only a message."""
 	issue = Issue()
 	issue.msg = args.pop(0)
-	issue.store()
-	print "Issue stored as", issue.guid
+	_HOOKS["be_store_issue"](issue)
+	print "issue stored as", issue.guid
 
 @hooked
 def cmd_list(args):
 	"""Lists all issues, which are not closed."""
-	for path in iglob(os.path.join(_CONFIG["data_dir"], "*.issue")):
-		guid = os.path.basename(path)[:-6]
-		issue = Issue(guid)
+	for guid in _HOOKS["be_all_guids"]():
+		issue = _HOOKS["be_load_issue"](guid)
 		if issue.properties["status"] != "closed":
 			print issue.shortString()
 
@@ -185,7 +198,7 @@ def cmd_edit(args):
 	"""Edit a specific issue.
 If none specified a new issue is generated (like add does.)"""
 	try:
-		guid = complete_guid(args[0])
+		guid = _HOOKS["be_complete_guid"](args[0])
 		if not guid:
 			return
 	except IndexError:
@@ -194,13 +207,14 @@ If none specified a new issue is generated (like add does.)"""
 	if not editor:
 		print "Error: no $EDITOR environment variable"
 		return
-	issue = Issue(guid)
-	if not guid:
-		issue.store() # generate skeleton
-	cmd = "%s %s" % (editor, issue.filename)
+	issue = _HOOKS["be_load_issue"](guid)
+	if not guid: # generate skeleton
+		_HOOKS["be_store_issue"](issue)
+	filename = be_gen_path(guid)
+	cmd = "%s %s" % (editor, filename)
 	os.system(cmd)
-	issue = Issue(guid)
-	issue.store() # updates modified property
+	issue = _HOOKS["be_load_issue"](guid)
+	_HOOKS["be_store_issue"](issue) # updates modified properties
 	if not guid: # generated a new issue
 		print "Issue stored as", issue.guid
 
@@ -210,11 +224,11 @@ def cmd_show(args):
 	if not args:
 		print "Error: need guid argument"
 		return
-	guid = complete_guid(args[0])
+	guid = _HOOKS["be_complete_guid"](args[0])
 	if not guid:
 		return
-	issue = Issue(guid)
-	print open(issue.filename).read()
+	issue = _HOOKS["be_load_issue"](guid)
+	print issue.longString()
 
 @hooked
 def cmd_close(args):
@@ -222,12 +236,12 @@ def cmd_close(args):
 	if not args:
 		print "Error: need guid argument"
 		return
-	guid = complete_guid(args[0])
+	guid = _HOOKS["be_complete_guid"](args[0])
 	if not guid:
 		return
-	issue = Issue(guid)
+	issue = _HOOKS["be_load_issue"](guid)
 	issue.properties["status"] = "closed"
-	issue.store()
+	_HOOKS["be_store_issue"](issue)
 
 _USAGE = """\
 A command-line issue tracker for a lazy developer.
