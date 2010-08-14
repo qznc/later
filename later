@@ -235,17 +235,30 @@ def cmd_show(args):
 	print issue.longString()
 
 @hooked
-def cmd_close(args):
-	"""Mark a specific issue as done."""
-	if not args:
-		print "Error: need guid argument"
-		return
+def set_status(guid, status):
+	"""Change status of a specific issue"""
 	guid = _HOOKS.be_complete_guid(args[0])
 	if not guid:
 		return
 	issue = _HOOKS.be_load_issue(guid)
-	issue.properties["status"] = "closed"
+	issue.properties["status"] = status
 	_HOOKS.be_store_issue(issue)
+
+@hooked
+def cmd_close(args):
+	"""Set status of a specific issue to 'closed'"""
+	if not args:
+		print "Error: need guid argument"
+		return
+	_HOOKS.set_status(args[0], "closed")
+
+@hooked
+def cmd_confirm(args):
+	"""Set status of a specific issue to 'confirmed'"""
+	if not args:
+		print "Error: need guid argument"
+		return
+	_HOOKS.set_status(args[0], "confirmed")
 
 _USAGE = """\
 A command-line issue tracker for a lazy developer.
@@ -254,7 +267,8 @@ Usage is "%s <cmd> ...", where <cmd> is one of
 init            create a data dir in the current directory
 add "foo bar"   report new issue with message "foo bar"
 edit <guid>     edit issue with the given guid (no guid creates new issue)
-close <gui>     mark an issue as done
+close <gui>     set status to closed
+confirm <gui>   set status to confirmed
 list            show all issues in short
 show <guid>     show issue <guid> completely
 help <cmd>      shows documentation for one of the commands
