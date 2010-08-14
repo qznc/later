@@ -191,11 +191,22 @@ def cmd_add(args):
 
 @hooked
 def cmd_list(args):
-	"""Lists all issues, which are not closed."""
+	"""By default lists all issues, which are not closed.
+Search terms can be given, then only issues with matching properties are listed.
+For example `list closed` shows all issues with status closed."""
+	assert len(args) <= 1
 	for guid in _HOOKS.be_all_guids():
 		issue = _HOOKS.be_load_issue(guid)
-		if issue.properties["status"] != "closed":
+		# if args specified search in properties,
+		# otherwise list all issues not closed.
+		if args:
+			for word in args:
+				for value in issue.properties.values():
+					if word in value:
+						print issue.shortString()
+		elif issue.properties["status"] != "closed":
 			print issue.shortString()
+
 
 @hooked
 def cmd_edit(args):
