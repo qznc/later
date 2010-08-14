@@ -248,7 +248,7 @@ def cmd_show(args):
 @hooked
 def set_status(guid, status):
 	"""Change status of a specific issue"""
-	guid = _HOOKS.be_complete_guid(args[0])
+	guid = _HOOKS.be_complete_guid(guid)
 	if not guid:
 		return
 	issue = _HOOKS.be_load_issue(guid)
