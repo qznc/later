@@ -53,6 +53,8 @@ def load_plugins():
 def load_config():
 	"""Load config from file"""
 	path = find_config()
+	if not path:
+		return
 	if os.path.isfile(path):
 		for line in open(path):
 			i = line.index(": ")
@@ -136,7 +138,7 @@ class Issue:
 
 # explicitly not @hooked, since backend specific
 def be_gen_path(guid):
-	return os.path.join(_CONFIG["data_dir"], guid + ".issue")
+	return os.path.join(_CONFIG.get("data_dir", ""), guid + ".issue")
 
 @hooked
 def be_all_guids():
