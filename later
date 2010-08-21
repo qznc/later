@@ -191,24 +191,43 @@ def cmd_add(args):
 	_HOOKS.be_store_issue(issue)
 	print "issue stored as", issue.guid
 
+def gen_matcher(args):
+	"""Generate an issue matcher from command line arguments"""
+	if not args:
+		def open_matcher(issue):
+			"""Default: only list non closed issues"""
+			return issue.properties["status"] != "closed"
+		return open_matcher
+	elif len(args) > 1:
+		parts = [gen_matcher([arg]) for arg in args]
+		def matcher_and(issue):
+			"""Every sub matcher must return True"""
+			for p in parts:
+				if not p(issue):
+					return False
+			return True
+		return matcher_and
+	else:
+		assert len(args) == 1
+		key, value = args[0].split("=")
+		def matcher(issue):
+			return issue.properties.get(key, None) == value
+		return matcher
+	assert False
+
 @hooked
 def cmd_list(args):
 	"""By default lists all issues, which are not closed.
-Search terms can be given, then only issues with matching properties are listed.
-For example `list closed` shows all issues with status closed."""
-	assert len(args) <= 1
+Search terms can be given, then only issues where all search terms match the issue properties.
+For example `list status=closed` shows all issues with status closed.
+`list reporter=beza1e1 status=confirmed` shows all confirmed issues reported by beza1e1."""
+	matcher = gen_matcher(args)
 	for guid in _HOOKS.be_all_guids():
 		issue = _HOOKS.be_load_issue(guid)
 		# if args specified search in properties,
 		# otherwise list all issues not closed.
-		if args:
-			for word in args:
-				for value in issue.properties.values():
-					if word in value:
-						print issue.shortString()
-		elif issue.properties["status"] != "closed":
+		if matcher(issue):
 			print issue.shortString()
-
 
 @hooked
 def cmd_edit(args):
