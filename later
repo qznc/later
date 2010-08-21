@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import os
 import sys
-import pwd
+import getpass
 import imp
 from uuid import uuid4
 from glob import iglob
@@ -42,7 +42,7 @@ def find_config():
 @hooked
 def guess_username():
 	# try user login name
-	return pwd.getpwuid(os.getuid())[0]
+	return getpass.getuser()
 
 def load_plugins():
 	for path in iglob(os.path.join(_CONFIG["data_dir"], "*.py")):
