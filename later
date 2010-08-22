@@ -177,6 +177,12 @@ def be_load_issue(guid):
 	m, p = load_lfile(path)
 	return Issue(guid, p, m)
 
+@hooked
+def be_delete_issue(guid):
+	assert len(guid) == 36
+	path = be_gen_path(guid)
+	os.remove(path)
+
 # explicitly not @hooked, since now plugins available at this point
 def cmd_init(args):
 	"""Create a new data directory for issues in the current dir."""
