@@ -209,10 +209,19 @@ def gen_matcher(args):
 		return matcher_and
 	else:
 		assert len(args) == 1
-		key, value = args[0].split("=")
-		def matcher(issue):
-			return issue.properties.get(key, None) == value
-		return matcher
+		pattern = args[0]
+		if "!=" in pattern:
+			key, value = pattern.split("!=")
+			def except_matcher(issue):
+				return issue.properties.get(key, value) != value
+			return except_matcher
+		elif "=" in pattern:
+			key, value = pattern.split("=")
+			def matcher(issue):
+				return issue.properties.get(key, None) == value
+			return matcher
+		else:
+			print "Can not parse pattern:", pattern
 	assert False
 
 @hooked
@@ -220,7 +229,7 @@ def cmd_list(args):
 	"""By default lists all issues, which are not closed.
 Search terms can be given, then only issues where all search terms match the issue properties.
 For example `list status=closed` shows all issues with status closed.
-`list reporter=beza1e1 status=confirmed` shows all confirmed issues reported by beza1e1."""
+`list reporter!=beza1e1 status=confirmed` shows all confirmed issues not reported by beza1e1."""
 	matcher = gen_matcher(args)
 	for guid in _HOOKS.be_all_guids():
 		issue = _HOOKS.be_load_issue(guid)
