@@ -15,6 +15,10 @@ _CONFIG={
 	"default_priority": 0,
 }
 
+def error(msg):
+	print "Error:", msg
+	exit(2)
+
 class Hooks(object):
 	def __getitem__(self, key):
 		return self.__dict__[key]
@@ -179,8 +183,7 @@ def cmd_init(args):
 	try:
 		os.mkdir(_DATA_DIR)
 	except OSError, e:
-		print "Could not create data directory:", e
-		return
+		error("Could not create data directory: " + str(e))
 	store_config(os.path.join(_DATA_DIR, _CONFIG_FILE_NAME))
 
 @hooked
@@ -220,9 +223,7 @@ def gen_matcher(args):
 			def matcher(issue):
 				return issue.properties.get(key, None) == value
 			return matcher
-		else:
-			print "Can not parse pattern:", pattern
-	assert False
+	error("Can not parse pattern: " + " ".join(args))
 
 @hooked
 def cmd_list(args):
@@ -250,8 +251,7 @@ If none specified a new issue is generated (like add does.)"""
 		guid = None
 	editor = os.getenv("EDITOR")
 	if not editor:
-		print "Error: no $EDITOR environment variable"
-		return
+		error("no $EDITOR environment variable")
 	issue = _HOOKS.be_load_issue(guid)
 	fh, filename = mkstemp(".issue")
 	store_lfile(filename, issue.msg, issue.properties)
@@ -267,8 +267,7 @@ If none specified a new issue is generated (like add does.)"""
 def cmd_show(args):
 	"""Show a specific issue."""
 	if not args:
-		print "Error: need guid argument"
-		return
+		error("need guid argument")
 	guid = _HOOKS.be_complete_guid(args[0])
 	if not guid:
 		return
@@ -289,24 +288,21 @@ def set_status(guid, status):
 def cmd_close(args):
 	"""Set status of a specific issue to 'closed'"""
 	if not args:
-		print "Error: need guid argument"
-		return
+		error("need guid argument")
 	_HOOKS.set_status(args[0], "closed")
 
 @hooked
 def cmd_confirm(args):
 	"""Set status of a specific issue to 'confirmed'"""
 	if not args:
-		print "Error: need guid argument"
-		return
+		error("need guid argument")
 	_HOOKS.set_status(args[0], "confirmed")
 
 @hooked
 def cmd_assign(args):
 	"""Assign an issue to someone"""
 	if not args or len(args) < 2:
-		print "Error: give guid and assignee"
-		return
+		error("need guid and assignee")
 	guid = _HOOKS.be_complete_guid(args[0])
 	issue = _HOOKS.be_load_issue(guid)
 	issue.properties["responsible"] = " ".join(args[1:])
@@ -341,8 +337,7 @@ def cmd_help(args):
 
 def main():
 	if len(sys.argv) <= 1:
-		print "Error: No command given. Try 'help'."
-		return
+		error("No command given. Try 'help'.")
 	if sys.argv[1] == "init":
 		cmd_init(sys.argv[2:])
 		return
@@ -350,8 +345,7 @@ def main():
 	# e.g. "add" leads to calling "cmd_add"
 	fun = _HOOKS.get("cmd_" + sys.argv[1], None)
 	if not fun:
-		print "Error: Unknown command. Try 'help'."
-		return
+		error("Unknown command. Try 'help'.")
 	fun(sys.argv[2:])
 
 if __name__ == "__main__":
