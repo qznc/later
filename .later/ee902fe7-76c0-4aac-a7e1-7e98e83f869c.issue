@@ -1,8 +1,10 @@
 status: confirmed
 reporter: zwinkau
 responsible: nobody
-modified: 2010-08-12T20:22:49
+modified: 2010-10-05T09:26:45
 created: 2010-08-12T08:48:42
 priority: 0
 
-Web frontend
+Interactive Web frontend
+
+In contrast to the htmlreport plugin, adding and editing issues should be possible.
