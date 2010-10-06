@@ -1,0 +1,43 @@
+A list of properties and their conventional semantics.
+This file serves as a standard to avoid plugin conflicts.
+
+## status
+Set to "closed", if the issue should be hidden from now on.
+Anything else is arbitrary.
+
+## responsible
+Name (and email) of the person, who is responsible for resolving the issue.
+Ask her for the progress.
+
+## modified
+Date, when the issue was modified last.
+
+## created
+Date, when the issue was originally created
+
+## reporter
+Name (and email) of the person, who reported the issue.
+Ask her for uncertainties in the issue.
+
+
+# Optional
+The following properties are not inserted by default.
+
+## component
+Name of the module/part/piece this issue affects.
+
+## deadline
+Date, when the issue should be set to closed.
+
+## manhours
+Estimation of how many hour are needed to resolve the issue.
+
+## dependencies
+Space-separated GUIDs of other issues, which need to be resolved before.
+
+## priority
+Positive integer value of importance.
+The greater the more important.
+The default is 2.
+Hence, 1 means unimportant and 3 and above means higher priority.
+Intentionally, there is no upper limit.
