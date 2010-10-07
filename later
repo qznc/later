@@ -12,7 +12,7 @@ _CONFIG_FILE_NAME="config"
 _DATA_DIR=".later"
 
 _CONFIG={
-	"default_priority": 0,
+	"default_priority": 2,
 }
 
 def error(msg):
