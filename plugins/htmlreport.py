@@ -22,6 +22,7 @@ h1,
 .issue .guid { color: #777; }
 .stats th,
 .properties th { text-align: right; font-weight: normal; }
+.issue { border-left: 2px solid #ddd; padding-left: 5px; }
 .issue .guid { float: right; }
 .issue .guid,
 .issue .msg { font-family: monospace; }
