@@ -15,8 +15,10 @@ body {
 h1 { font-weight: bold; font-style: italic; }
 h1,
 .status_closed,
+.stats th,
 .properties th,
 .issue .guid { color: #777; }
+.stats th,
 .properties th { text-align: right; font-weight: normal; }
 .issue .guid { float: right; }
 .issue .guid,
@@ -53,10 +55,28 @@ _HTML_FOOT = """\
 
 _HOOKS=None
 
+class Stats:
+   def __init__(self):
+      self.open_issues = 0
+      self.unassigned_issues = 0
+   def process(self, info):
+      if info['status'] != "closed":
+         self.open_issues += 1
+         if info['responsible'] == "nobody":
+            self.unassigned_issues += 1
+   def toHTML(self):
+      string = '<table class="stats">'
+      string += '<tr><th>Open</th><td>%d</td></tr>\n' % self.open_issues
+      string += '<tr><th>Unassigned</th><td>%d</td></tr>\n' % self.unassigned_issues
+      string += "</table>"
+      return string
+
 def cmd_htmlreport(args):
    """Generate an html issue list."""
-   print _HTML_HEAD
+   # load data
    delayed = list()
+   opened = list()
+   stats = Stats()
    for guid in _HOOKS.be_all_guids():
       guid = _HOOKS.be_complete_guid(guid)
       issue = _HOOKS.be_load_issue(guid)
@@ -67,10 +87,16 @@ def cmd_htmlreport(args):
       info['title'] = issue.msg[:i]
       info['msg'] = issue.msg[i:]
       info['guid'] = guid
+      stats.process(info)
       if info['status'] != "closed":
-         print _HTML_ISSUE % info
+         opened.append(info)
       else:
          delayed.append(info)
+   # output
+   print _HTML_HEAD
+   print stats.toHTML()
+   for info in opened:
+      print _HTML_ISSUE % info
    if delayed:
       print "<hr/>"
    for info in delayed:
