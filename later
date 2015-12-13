@@ -319,13 +319,16 @@ A command-line issue tracker for a lazy developer.
 Usage is "%s <cmd> ...", where <cmd> is one of
 
 init            create a data dir in the current directory
+help <cmd>      shows documentation for one of the commands
+
 add "foo bar"   report new issue with message "foo bar"
 edit <guid>     edit issue with the given guid (no guid creates new issue)
-close <gui>     set status to closed
-confirm <gui>   set status to confirmed
 list            show all issues in short
 show <guid>     show issue <guid> completely
-help <cmd>      shows documentation for one of the commands
+assign <guid> "name [email]" make somebody responsible for issue with the given guid
+
+close <gui>     set status to closed
+confirm <gui>   set status to confirmed
 """ % (sys.argv[0])
 
 @hooked
