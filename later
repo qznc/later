@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 import os
 import sys
 import getpass
@@ -8,11 +9,14 @@ from glob import iglob
 from datetime import datetime
 from tempfile import mkstemp
 
-_CONFIG_FILE_NAME="config"
-_DATA_DIR=".later"
+_SCRIPT_DIR = "/".join(sys.argv[0].split("/")[:-1]) 
+_PLUGINS_DIR = _SCRIPT_DIR + "/plugins"
+_CONFIG_FILE_NAME = "config"
+_DATA_DIR = ".later"
 
 _CONFIG={
-	"default_priority": 2,
+	"default_piority": 2,
+	"username": "ongspxm"
 }
 
 def error(msg):
@@ -42,6 +46,7 @@ def find_config():
 		if os.path.isdir(data) and os.path.isfile(config):
 			return config
 		current, trash = os.path.split(current)
+	return os.path.join(_SCRIPT_DIR, _CONFIG_FILE_NAME)
 
 @hooked
 def guess_username():
@@ -49,22 +54,31 @@ def guess_username():
 	return getpass.getuser()
 
 def load_plugins():
-	for path in iglob(os.path.join(_CONFIG["data_dir"], "*.py")):
+	load_dir_plugins(_CONFIG.get("data_dir"))
+	load_dir_plugins(_PLUGINS_DIR)
+
+def load_dir_plugins(parentDir):
+	if not parentDir: return
+
+	for path in iglob(os.path.join(parentDir, "*.py")):
 		name = os.path.basename(path)[:-3]
 		mod = imp.load_source("plugin:"+name, path)
 		mod.plugin_init(_HOOKS)
 
 def load_config():
 	"""Load config from file"""
+	global _CONFIG
+	
 	path = find_config()
-	if not path:
-		return
-	if os.path.isfile(path):
+	if path and os.path.isfile(path):
 		for line in open(path):
-			i = line.index(": ")
+			i = line.find(": ")
+			if i<0: continue
+
 			_CONFIG[line[:i]] = line[i+2:-1]
 		_CONFIG["data_dir"] = os.path.dirname(path)
 	load_plugins()
+	
 	if not _CONFIG.get("username", None):
 		_CONFIG["username"] = _HOOKS.guess_username()
 
@@ -103,6 +117,7 @@ def load_lfile(path):
 def store_lfile(path, msg, props):
 	fh = open(path, 'w')
 	for key,val in props.items():
+		if not val: continue
 		fh.write("%s: %s\n" % (key,val))
 	fh.write("\n")
 	fh.write(msg)
@@ -119,7 +134,7 @@ class Issue:
 				#priority=_CONFIG["default_priority"],
 				responsible="nobody",
 				created=serialize_datetime(datetime.utcnow()),
-				reporter=_HOOKS.guess_username())
+				reporter=_CONFIG['username'])
 		for k,v in properties.items():
 			self.properties[k] = v
 		self.msg = message
@@ -131,7 +146,7 @@ class Issue:
 			i = None
 		string = self.msg[:i]
 		status = self.properties.get("status", "?")
-		return " %-50s\t(%s, %s)" % (string, status, self.guid[:8])
+		return " %s  %-50s %s"%(self.guid[:8], string, status) 
 	def longString(self):
 		"""Multi line representation"""
 		string = "%s\n" % (self.guid)
@@ -182,6 +197,10 @@ def be_delete_issue(guid):
 	assert len(guid) == 36
 	path = be_gen_path(guid)
 	os.remove(path)
+
+@hooked
+def be_get_data_dir():
+	return _CONFIG.get("data_dir", "")
 
 # explicitly not @hooked, since now plugins available at this point
 def cmd_init(args):
@@ -235,11 +254,22 @@ def gen_matcher(args):
 def cmd_list(args):
 	"""By default lists all issues, which are not closed.
 Search terms can be given, then only issues where all search terms match the issue properties.
-For example `list status=closed` shows all issues with status closed.
-`list reporter!=beza1e1 status=confirmed` shows all confirmed issues not reported by beza1e1."""
+
+Examples:
+- `list status=closed` shows all issues with status closed.
+- `list reporter!=beza1e1 status=confirmed` shows all confirmed issues not reported by beza1e1.
+- `list bugs` shows issues beginning with "bug:"
+	"""
+	
+	issues = (_HOOKS.be_load_issue(guid) for guid in _HOOKS.be_all_guids())
+
+	# Filtering for bugs
+	if args.count('bugs'):
+		issues = (iss for iss in issues if iss.msg[:3]=="bug")
+		args.remove('bugs')
+
 	matcher = gen_matcher(args)
-	for guid in _HOOKS.be_all_guids():
-		issue = _HOOKS.be_load_issue(guid)
+	for issue in issues:
 		# if args specified search in properties,
 		# otherwise list all issues not closed.
 		if matcher(issue):
@@ -311,28 +341,37 @@ def cmd_assign(args):
 		error("need guid and assignee")
 	guid = _HOOKS.be_complete_guid(args[0])
 	issue = _HOOKS.be_load_issue(guid)
+	
 	issue.properties["responsible"] = " ".join(args[1:])
 	_HOOKS.be_store_issue(issue)
 
 _USAGE = """\
 A command-line issue tracker for a lazy developer.
 Usage is "%s <cmd> ...", where <cmd> is one of
+								
+init						create dir in current directory
+add "msg"					report new issue with title "msg"
+edit <guid>					edit issue with the given guid
+close <guid>				set status to closed
+confirm <guid>				set status to confirmed
+assign <guid> <developer>	set responsible to developer
+list						show all issues in short
+show <guid>					show issue <guid> completely
+help <cmd>					shows documentation for <cmd>
 
-init            create a data dir in the current directory
-help <cmd>      shows documentation for one of the commands
+PLUGINS
+=======
 
-add "foo bar"   report new issue with message "foo bar"
-edit <guid>     edit issue with the given guid (no guid creates new issue)
-list            show all issues in short
-show <guid>     show issue <guid> completely
-assign <guid> "name [email]" make somebody responsible for issue with the given guid
-
-close <gui>     set status to closed
-confirm <gui>   set status to confirmed
+schedule					calculates/show deadlines
+htmlreport					generate html report
+delete <guid>				delete issue <guid>
+delete-closed				delete all closed issues
+list-subdirs				show issue list of subdirs
+revision					manage revisions
 """ % (sys.argv[0])
 
 @hooked
-def cmd_help(args):
+def cmd_help(args=[]):
 	"""Provides general usage and help for every command."""
 	if len(args) == 0:
 		print _USAGE
@@ -346,15 +385,20 @@ def cmd_help(args):
 
 def main():
 	if len(sys.argv) <= 1:
-		error("No command given. Try 'help'.")
+		print _USAGE
+		return
+
 	if sys.argv[1] == "init":
 		cmd_init(sys.argv[2:])
 		return
 	load_config()
+
 	# e.g. "add" leads to calling "cmd_add"
 	fun = _HOOKS.get("cmd_" + sys.argv[1], None)
-	if not fun:
-		error("Unknown command. Try 'help'.")
+	if not fun: 
+		return _HOOKS.cmd_help()
+	print
+	
 	fun(sys.argv[2:])
 
 if __name__ == "__main__":

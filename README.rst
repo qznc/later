@@ -11,6 +11,9 @@ Clone the github repository git://github.com/beza1e1/later.git
 and use the ``later`` executable.
 Start with ``later help``.
 
+Default config available in ``config`` (found in same directory as
+the ``later`` executable.
+
 Philosphy
 ---------
 

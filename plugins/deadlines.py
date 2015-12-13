@@ -64,7 +64,9 @@ should be calculated. Default is '1'."""
    if args:
       global MANHOURS_PER_DAY
       MANHOURS_PER_DAY = float(args[0])
-   print "deadlines:"
+   
+   print datetime.now().strftime("%Y-%m-%d\n==========")
+   
    for issue in schedule():
       if issue.ideadline:
          print issue.ideadline.strftime("%Y/%m/%d"),
